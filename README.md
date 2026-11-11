@@ -1,4 +1,6 @@
-# Pulse Music API Gateway
+# RealMusicBackend
+
+仿网易云音乐后端网关（Pulse Music API Gateway）。
 
 This folder runs the maintained `@neteasecloudmusicapienhanced/api` package as a local HTTP service.
 
