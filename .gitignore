@@ -1,0 +1,6 @@
+node_modules/
+*.log
+backend.pid
+.npm-cache/
+.env
+.env.*

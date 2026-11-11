@@ -1,0 +1,12 @@
+{
+  "name": "pulse-music-api-gateway",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local NeteaseCloudMusicApi-compatible gateway for Pulse Music",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@neteasecloudmusicapienhanced/api": "4.41.1"
+  }
+}
