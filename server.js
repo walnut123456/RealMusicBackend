@@ -10,12 +10,22 @@ const path = require('node:path')
 const anonymousTokenPath = path.join(os.tmpdir(), 'anonymous_token')
 fs.closeSync(fs.openSync(anonymousTokenPath, 'a'))
 
-const { serveNcmApi } = require('@neteasecloudmusicapienhanced/api/server')
+const { serveNcmApi, getModulesDefinitions } = require('@neteasecloudmusicapienhanced/api/server')
+const checkQrLogin = require('./qr-check')
 
 async function main() {
   const port = Number(process.env.PORT || 3000)
   const host = process.env.HOST || '0.0.0.0'
-  const app = await serveNcmApi({ port, host, checkVersion: false })
+  const apiRoot = path.dirname(require.resolve('@neteasecloudmusicapienhanced/api/server'))
+  const moduleDefs = await getModulesDefinitions(path.join(apiRoot, 'module'), {
+    'daily_signin.js': '/daily_signin',
+    'fm_trash.js': '/fm_trash',
+    'personal_fm.js': '/personal_fm',
+  })
+  const qrModule = moduleDefs.find((item) => item.identifier === 'login_qr_check')
+  if (!qrModule) throw new Error('QR login check module is missing')
+  qrModule.module = checkQrLogin
+  const app = await serveNcmApi({ port, host, checkVersion: false, moduleDefs })
 
   const shutdown = (signal) => {
     console.log(`[Pulse API] ${signal} received, shutting down`)
