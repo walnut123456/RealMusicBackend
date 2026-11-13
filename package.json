@@ -7,6 +7,7 @@
     "start": "node server.js"
   },
   "dependencies": {
-    "@neteasecloudmusicapienhanced/api": "4.41.1"
+    "@neteasecloudmusicapienhanced/api": "4.41.1",
+    "pg": "^8.23.1"
   }
 }

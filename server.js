@@ -12,6 +12,7 @@ fs.closeSync(fs.openSync(anonymousTokenPath, 'a'))
 
 const { serveNcmApi, getModulesDefinitions } = require('@neteasecloudmusicapienhanced/api/server')
 const checkQrLogin = require('./qr-check')
+const { attachRealMusicApi } = require('./realmusic-api')
 
 async function main() {
   const port = Number(process.env.PORT || 3000)
@@ -26,10 +27,12 @@ async function main() {
   if (!qrModule) throw new Error('QR login check module is missing')
   qrModule.module = checkQrLogin
   const app = await serveNcmApi({ port, host, checkVersion: false, moduleDefs })
+  const realMusic = attachRealMusicApi(app)
+  realMusic.ready.catch((error) => console.error('[Real Music API] Database initialization failed:', error.message))
 
   const shutdown = (signal) => {
     console.log(`[Pulse API] ${signal} received, shutting down`)
-    app.server?.close(() => process.exit(0))
+    app.server?.close(async () => { await realMusic.close(); process.exit(0) })
   }
 
   process.once('SIGINT', () => shutdown('SIGINT'))
