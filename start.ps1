@@ -39,14 +39,10 @@ for ($attempt = 0; $attempt -lt 40; $attempt++) {
     }
     if (Test-BackendPort $port) {
         Set-Content -LiteralPath $pidFile -Value $process.Id
-        Write-Output "Pulse Music API started on port $port (PID $($process.Id))."
+        Write-Output "Real Music API started on port $port (PID $($process.Id))."
         Write-Output "Logs: $stdoutLog and $stderrLog"
         exit 0
     }
 }
 
 throw "Backend did not open port $port within 10 seconds. See $stderrLog"
-
-# Earlier notes kept from this file:
-# 2.网关这边  灰度的整个实现， 实例的排查故障排除
-# 4.令牌桶的实现

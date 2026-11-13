@@ -1,8 +1,8 @@
 {
-  "name": "pulse-music-api-gateway",
+  "name": "real-music-backend",
   "version": "1.0.0",
   "private": true,
-  "description": "Local NeteaseCloudMusicApi-compatible gateway for Pulse Music",
+  "description": "Real Music account API and NetEase-compatible music gateway",
   "scripts": {
     "start": "node server.js"
   },

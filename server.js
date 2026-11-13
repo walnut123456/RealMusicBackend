@@ -31,7 +31,7 @@ async function main() {
   realMusic.ready.catch((error) => console.error('[Real Music API] Database initialization failed:', error.message))
 
   const shutdown = (signal) => {
-    console.log(`[Pulse API] ${signal} received, shutting down`)
+    console.log(`[Real Music API] ${signal} received, shutting down`)
     app.server?.close(async () => { await realMusic.close(); process.exit(0) })
   }
 
@@ -40,6 +40,6 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error('[Pulse API] Failed to start', error)
+  console.error('[Real Music API] Failed to start', error)
   process.exit(1)
 })
