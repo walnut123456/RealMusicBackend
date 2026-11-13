@@ -98,6 +98,85 @@ function attachRealMusicApi(app) {
     res.json({ ok: true })
   })
 
+  route('playlists/list', async (req, res, db) => {
+    const user = await authenticated(req, res, db)
+    if (!user) return
+    const result = await db.query(`SELECT p.id,p.name,p.created_at,COUNT(t.track_id)::int AS track_count,
+      (SELECT artwork_url FROM rm_playlist_tracks WHERE playlist_id=p.id ORDER BY position LIMIT 1) AS cover_url
+      FROM rm_playlists p LEFT JOIN rm_playlist_tracks t ON t.playlist_id=p.id
+      WHERE p.user_id=$1 GROUP BY p.id ORDER BY p.created_at DESC`, [user.id])
+    res.json({ playlists: result.rows.map(row => ({ id: Number(row.id), name: row.name,
+      trackCount: row.track_count, coverUrl: row.cover_url || '' })) })
+  })
+
+  route('playlists/create', async (req, res, db) => {
+    const user = await authenticated(req, res, db)
+    if (!user) return
+    const name = String(req.body?.name || '').trim()
+    if (!name || name.length > 80) return res.status(400).json({ error: '歌单名称需要 1–80 个字符' })
+    const count = await db.query('SELECT COUNT(*)::int AS count FROM rm_playlists WHERE user_id=$1', [user.id])
+    if (count.rows[0].count >= 100) return res.status(409).json({ error: '每个账号最多创建 100 个歌单' })
+    const result = await db.query('INSERT INTO rm_playlists (user_id,name) VALUES ($1,$2) RETURNING id', [user.id,name])
+    res.status(201).json({ id: Number(result.rows[0].id) })
+  })
+
+  route('playlists/rename', async (req, res, db) => {
+    const user = await authenticated(req, res, db)
+    if (!user) return
+    const id = playlistId(req.body?.id)
+    const name = String(req.body?.name || '').trim()
+    if (!id || !name || name.length > 80) return res.status(400).json({ error: '歌单参数无效' })
+    const result = await db.query('UPDATE rm_playlists SET name=$1 WHERE id=$2 AND user_id=$3 RETURNING id', [name,id,user.id])
+    if (!result.rows[0]) return res.status(404).json({ error: '歌单不存在' })
+    res.json({ ok: true })
+  })
+
+  route('playlists/delete', async (req, res, db) => {
+    const user = await authenticated(req, res, db)
+    if (!user) return
+    const id = playlistId(req.body?.id)
+    if (!id) return res.status(400).json({ error: '歌单 ID 无效' })
+    const result = await db.query('DELETE FROM rm_playlists WHERE id=$1 AND user_id=$2 RETURNING id', [id,user.id])
+    if (!result.rows[0]) return res.status(404).json({ error: '歌单不存在' })
+    res.json({ ok: true })
+  })
+
+  route('playlists/tracks', async (req, res, db) => {
+    const user = await authenticated(req, res, db)
+    if (!user) return
+    const id = playlistId(req.body?.id)
+    if (!id) return res.status(400).json({ error: '歌单 ID 无效' })
+    const owner = await db.query('SELECT id FROM rm_playlists WHERE id=$1 AND user_id=$2', [id,user.id])
+    if (!owner.rows[0]) return res.status(404).json({ error: '歌单不存在' })
+    const result = await db.query(`SELECT track_id,title,artist,description,duration_sec,artwork_url,accent,source_page_url
+      FROM rm_playlist_tracks WHERE playlist_id=$1 ORDER BY position LIMIT 5000`, [id])
+    res.json({ tracks: result.rows.map(trackJson) })
+  })
+
+  route('playlists/set-track', async (req, res, db) => {
+    const user = await authenticated(req, res, db)
+    if (!user) return
+    const id = playlistId(req.body?.id)
+    const track = req.body?.track || {}
+    const trackId = String(track.id || '')
+    if (!id || !validTrackId(trackId)) return res.status(400).json({ error: '歌单或歌曲 ID 无效' })
+    const owner = await db.query('SELECT id FROM rm_playlists WHERE id=$1 AND user_id=$2', [id,user.id])
+    if (!owner.rows[0]) return res.status(404).json({ error: '歌单不存在' })
+    if (req.body?.added === true) {
+      const title = String(track.title || '').slice(0,300)
+      const artist = String(track.artist || '').slice(0,300)
+      if (!title || !artist) return res.status(400).json({ error: '歌曲信息不完整' })
+      await db.query(`INSERT INTO rm_playlist_tracks
+        (playlist_id,track_id,title,artist,description,duration_sec,artwork_url,accent,source_page_url,position)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,
+          COALESCE((SELECT MAX(position)+1 FROM rm_playlist_tracks WHERE playlist_id=$1),0))
+        ON CONFLICT (playlist_id,track_id) DO NOTHING`,
+      [id,trackId,title,artist,String(track.description||'').slice(0,1000),Math.max(0,Math.min(Number(track.durationSec)||0,86400)),
+        String(track.artworkUrl||'').slice(0,2048),Number(track.accent)||0,String(track.sourcePageUrl||'').slice(0,2048)])
+    } else await db.query('DELETE FROM rm_playlist_tracks WHERE playlist_id=$1 AND track_id=$2', [id,trackId])
+    res.json({ ok: true })
+  })
+
   route('logout', async (req, res, db) => {
     const token = bearer(req)
     if (token) await db.query('DELETE FROM rm_sessions WHERE token_hash=$1', [digest(token)])
@@ -120,6 +199,15 @@ async function initialize(db) {
     duration_sec INTEGER NOT NULL, artwork_url TEXT NOT NULL, accent BIGINT NOT NULL,
     source_page_url TEXT NOT NULL, saved_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY(user_id,track_id))`)
+  await db.query(`CREATE TABLE IF NOT EXISTS rm_playlists (
+    id BIGSERIAL PRIMARY KEY, user_id BIGINT NOT NULL REFERENCES rm_users(id) ON DELETE CASCADE,
+    name TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`)
+  await db.query(`CREATE TABLE IF NOT EXISTS rm_playlist_tracks (
+    playlist_id BIGINT NOT NULL REFERENCES rm_playlists(id) ON DELETE CASCADE,
+    track_id TEXT NOT NULL, title TEXT NOT NULL, artist TEXT NOT NULL, description TEXT NOT NULL,
+    duration_sec INTEGER NOT NULL, artwork_url TEXT NOT NULL, accent BIGINT NOT NULL,
+    source_page_url TEXT NOT NULL, position BIGINT NOT NULL,
+    PRIMARY KEY(playlist_id,track_id))`)
   return true
 }
 
@@ -150,5 +238,10 @@ function limited(req) {
   item.count++
   return item.count > 20
 }
+function playlistId(value) { const id = Number(value); return Number.isSafeInteger(id) && id > 0 ? id : null }
+function validTrackId(id) { return /^(bilibili|netease):[A-Za-z0-9:_-]{1,120}$/.test(id) }
+function trackJson(row) { return { id: row.track_id, title: row.title, artist: row.artist,
+  description: row.description, durationSec: row.duration_sec, artworkUrl: row.artwork_url,
+  accent: Number(row.accent), sourcePageUrl: row.source_page_url } }
 
 module.exports = { attachRealMusicApi }

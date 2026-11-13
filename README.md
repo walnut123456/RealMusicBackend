@@ -6,7 +6,7 @@ This folder runs the `@neteasecloudmusicapienhanced/api` gateway and Real Music'
 
 ## Real Music cloud accounts
 
-Provision a persistent PostgreSQL database, then set its connection string as the backend's `DATABASE_URL` environment variable. Use the database provider's internal URL when the database and this Node service share a private network. Never put the connection string in Git or in the Android app. Tables are created automatically on first startup. The database stores users, salted scrypt password hashes, hashed 30-day session tokens, and Bilibili/NetEase favorites. The Android app keeps only an encrypted token and a per-user SQLite cache.
+Provision a persistent PostgreSQL database, then set its connection string as the backend's `DATABASE_URL` environment variable. Use the database provider's internal URL when the database and this Node service share a private network. Never put the connection string in Git or in the Android app. Tables are created automatically on first startup. The database stores users, salted scrypt password hashes, hashed 30-day session tokens, Bilibili/NetEase favorites, and private Real Music playlists. Each playlist can hold tracks from either source. The Android app keeps an encrypted token and a per-user SQLite favorites cache.
 
 For durable data, do not use Render's Free Postgres plan: its database expires 30 days after creation. Use a persistent PostgreSQL plan/provider and back it up.
 
@@ -19,7 +19,7 @@ pnpm start
 
 The hosted service needs the same environment variable in its service settings, followed by a new deploy. Check `GET /realmusic/v1/health`; it returns `{"ok":true,"database":"connected"}` when ready. Without `DATABASE_URL`, music gateway routes still work but Real Music account routes return HTTP 503. Never expose registration or bearer tokens over plain HTTP on a public network. The production app should point to the service's HTTPS URL.
 
-Real Music routes are under `/realmusic/v1/`: `register`, `login`, `me`, `favorites/list`, `favorites/set`, and `logout`. They use POST JSON; authenticated routes require `Authorization: Bearer <token>`. Passwords and tokens are never placed in URLs. Existing device-local favorites are imported when the currently active legacy account logs into a cloud account with the same username. Local data stays intact until every import request succeeds.
+Real Music routes are under `/realmusic/v1/`: `register`, `login`, `me`, `favorites/list`, `favorites/set`, `playlists/list`, `playlists/create`, `playlists/rename`, `playlists/delete`, `playlists/tracks`, `playlists/set-track`, and `logout`. They use POST JSON; authenticated routes require `Authorization: Bearer <token>`. Passwords and tokens are never placed in URLs. Playlist operations always check the signed-in user; they do not call the NetEase playlist API. Existing device-local favorites are imported when the currently active legacy account logs into a cloud account with the same username. Local data stays intact until every import request succeeds.
 
 - Runtime: Node.js 22+ (currently tested with Node.js 24)
 - Framework: Express-based NeteaseCloudMusicApi-compatible service
@@ -60,6 +60,5 @@ To use a physical phone without USB, connect the phone and computer to the same 
 
 If the phone's browser cannot reach the URL, check that the devices are on the same non-guest network and that the router does not isolate Wi-Fi clients. If Windows Firewall blocks the connection, allow inbound TCP 3000 only on a trusted Private network and preferably only from the local subnet. Do not expose this unauthenticated compatibility gateway to the public internet. The current Release build blocks plain HTTP, so this LAN workflow uses the Debug build.
 
-The Android client calls `/personalized/newsong`, `/personalized`, `/top/playlist`,
-`/playlist/track/all`, `/toplist`, `/cloudsearch`, `/song/url`, and `/lyric`.
+The Android client uses `/personalized/newsong`, `/cloudsearch`, `/song/url`, and `/lyric` for NetEase songs. Personal playlists use only the Real Music routes above.
 This is an unofficial compatibility gateway. Do not expose it publicly with account cookies or treat it as an authorized commercial music source.
